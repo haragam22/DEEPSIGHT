@@ -1,12 +1,12 @@
 // One real, finished example for the walkthrough. Non-blocking: the walkthrough renders
 // immediately and swaps real numbers in when they arrive. If the backend has nothing and
-// a demo cannot be built, phase goes 'unavailable' and the slides fall back to diagrams 
+// the A4 & SSS survey cannot be built, phase goes 'unavailable' and the slides fall back to diagrams 
 // the walkthrough never blocks on the network.
 
 import { useEffect, useRef, useState } from 'react'
 
 import {
-    createDemoSurvey,
+    createA4SssSurvey,
     getDetection,
     getDetections,
     getStats,
@@ -41,19 +41,19 @@ export interface TourState {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // The walkthrough teaches, so it wants the curated example, not whichever file happens
-// to be first. The demo survey is that example  clean seabed, well-formed boxes. Real
+// to be first. The A4 & SSS survey is that example  clean seabed, well-formed boxes. Real
 // uploads are only a fallback, because a bad box on real data (a wreck measured at 1.6 km
 // along-track) makes a poor first picture of the pipeline.
 async function pickSurvey(note: (s: string) => void): Promise<string> {
   const { surveys } = await listSurveys()
   const usable = surveys.filter((s) => s.status === 'complete' && s.detection_count > 0)
 
-  const demo = usable.find((s) => s.survey_id.startsWith('svy_demo'))
-  if (demo) return demo.survey_id
+  const a4 = usable.find((s) => s.survey_id.startsWith('svy_a4sss'))
+  if (a4) return a4.survey_id
 
   try {
-    note('Building the demo survey…')
-    const made = await createDemoSurvey()
+    note('Building the A4 & SSS survey…')
+    const made = await createA4SssSurvey()
     await processSurvey(made.survey_id)
     for (let i = 0; i < 120; i++) {
       const st = await getSurveyStatus(made.survey_id)

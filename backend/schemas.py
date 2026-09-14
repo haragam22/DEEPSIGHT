@@ -150,10 +150,21 @@ class DetectionGeometry(BaseModel):
     fish_lon: float | None
 
 
+class Relief(BaseModel):
+    rows: int
+    cols: int
+    cell_m_across: float
+    cell_m_along: float | None
+    heights: list[float]
+    max_height_m: float
+    measured_fraction: float
+
+
 class DetectionDetail(BaseModel):
     detection: dict
     error_budget: ErrorBudget | None
     geometry: DetectionGeometry | None
+    relief: Relief | None
 
 
 # --- section 7 · stats ---

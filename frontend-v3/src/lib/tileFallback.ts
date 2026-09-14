@@ -1,5 +1,5 @@
 // WebSocket-free playback: poll GET /api/surveys/{id}/waterfall for PNG strips and feed
-// them into the same row queue the socket uses. Slower and quieter, but the demo never
+// them into the same row queue the socket uses. Slower and quieter, but the console never
 // shows an empty screen (implementation_P.md section 4.4).
 
 import { getWaterfallTile } from './api';

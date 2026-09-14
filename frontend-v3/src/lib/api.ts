@@ -1,7 +1,7 @@
 // Deep-Sight API client. One function per REST endpoint, matching docs/apiendpoints.md.
 //
 // Base URL: empty by default  requests go to the same origin and the Vite dev server
-// proxies /api, /ws and /health to the backend (keeps the demo single-origin and
+// proxies /api, /ws and /health to the backend (keeps the app single-origin and
 // offline-friendly). Set VITE_API_BASE at build time to point at a remote backend.
 
 import type {
@@ -119,7 +119,7 @@ export function processSurvey(id: string): Promise<ProcessResponse> {
   return req(`/api/surveys/${id}/process`, { method: 'POST' })
 }
 
-export function createDemoSurvey(): Promise<{ survey_id: string; filename: string; status: string; ping_count: number }> {
+export function createA4SssSurvey(): Promise<{ survey_id: string; filename: string; status: string; ping_count: number }> {
   return req('/api/dev/demo-survey', { method: 'POST' })
 }
 

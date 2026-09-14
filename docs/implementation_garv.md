@@ -241,6 +241,14 @@ Both box edges through the same chain → real-world width and height in metres 
 dimensions"). Object **height** comes from the shadow, not the box: shadow length + altitude + range →
 height by similar triangles. That height is also the input to suppression Rule 3.
 
+> **Contract addition (post-freeze, agreed with the owner).** `GET /api/detections/{id}` also returns
+> `relief` (`geometry/relief.py`): a heightfield of at most 40 × 40 cells. Footprint = box pixels above
+> 1.25 × the ping's seabed median (cell kept if ≥ 25 % highlight), then closed into one solid body
+> (morphological close, kernel 3 or 5 scaled to the grid, interior holes filled, largest connected piece kept); height per ping row = the same shadow
+> formula, shadow measured outboard of that row's outermost highlight pixel, median over ± 2 pings, then a 3 × 3 or 5 × 5 median (5 on grids of 24+ cells)
+> across the grid. Rows without a readable shadow copy the nearest measured row (`measured_fraction` reports the share
+> measured). `null` when there is no highlight or no shadow at all.
+
 ### 3.7 Blank-zone altitude fallback
 
 If the XTF header has no usable altitude: in a standard waterfall the first `~(altitude / range_resolution)`

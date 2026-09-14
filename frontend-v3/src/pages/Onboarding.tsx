@@ -467,7 +467,7 @@ function buildChapters(recentNames: string[]): Chapter[] {
             <div className="label-micro mb-1">Surveys on this machine</div>
             {recentNames.length === 0 ? (
               <p className="py-8 text-sm text-muted-foreground">
-                None yet. Upload an XTF, add side-scan images, or spin up a demo from the Surveys
+                None yet. Upload an XTF, add side-scan images, or spin up A4 & SSS from the Surveys
                 page.
               </p>
             ) : (

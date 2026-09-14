@@ -34,7 +34,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { ApiError, createDemoSurvey, deleteSurvey, processSurvey } from '@/lib/api'
+import { ApiError, createA4SssSurvey, deleteSurvey, processSurvey } from '@/lib/api'
 import { num, relativeTime } from '@/lib/format'
 import { useSurveyStore } from '@/stores/surveyStore'
 
@@ -42,7 +42,7 @@ export function Surveys() {
   const { surveys, loading, error, refresh } = useSurveyStore()
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'xtf' | 'image' | null>(null)
-  const [demoBusy, setDemoBusy] = useState(false)
+  const [a4Busy, setA4Busy] = useState(false)
   const [del, setDel] = useState<{ id: string; name: string } | null>(null)
   const [delBusy, setDelBusy] = useState(false)
 
@@ -56,19 +56,19 @@ export function Surveys() {
     navigate(`/console/${id}`)
   }
 
-  const runDemo = async () => {
-    setDemoBusy(true)
+  const runA4Sss = async () => {
+    setA4Busy(true)
     try {
-      const r = await createDemoSurvey()
-      toast.success('Demo survey created.')
+      const r = await createA4SssSurvey()
+      toast.success('A4 & SSS survey created.')
       await refresh()
-      // demo is ready immediately; kick detection so it has targets
+      // A4 & SSS is ready immediately; kick detection so it has targets
       await processSurvey(r.survey_id).catch(() => undefined)
       navigate(`/console/${r.survey_id}`)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Could not create demo survey.')
+      toast.error(e instanceof ApiError ? e.message : 'Could not create the A4 & SSS survey.')
     } finally {
-      setDemoBusy(false)
+      setA4Busy(false)
     }
   }
 
@@ -108,8 +108,8 @@ export function Surveys() {
           <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={loading}>
             <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
           </Button>
-          <Button size="sm" variant="outline" onClick={runDemo} disabled={demoBusy}>
-            <FlaskConical className="size-4" /> Demo
+          <Button size="sm" variant="outline" onClick={runA4Sss} disabled={a4Busy}>
+            <FlaskConical className="size-4" /> A4 & SSS
           </Button>
           <Button size="sm" variant="outline" onClick={() => setDialog('image')}>
             <ImageUp className="size-4" /> Images
@@ -138,7 +138,7 @@ export function Surveys() {
             className="rounded-none border-0"
             icon={<Waves className="size-8" />}
             title="No surveys yet"
-            description="Upload an XTF file, add side-scan images, or spin up a demo survey."
+            description="Upload an XTF file, add side-scan images, or spin up the A4 & SSS survey."
             action={
               <Button size="sm" onClick={() => setDialog('xtf')}>
                 <Upload className="size-4" /> Upload XTF

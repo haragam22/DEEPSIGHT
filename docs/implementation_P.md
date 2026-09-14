@@ -246,6 +246,9 @@ coordinate?"*, so it deserves real design attention:
   sends terms pre-sorted with a `dominant_term` and a plain-English `explanation`  render that sentence
   verbatim, don't write your own
 - Real-world dimensions and object height
+- **Estimated relief** from `relief` (contract §3, added post-freeze with the owner's agreement): the
+  heightfield drawn as small columns, labelled "estimated from shadow" with `measured_fraction` shown. A
+  toggle switches back to the plain dimension box; the box is also the fallback when `relief` is `null`
 - `flags` as small labels (`near_nadir`, `on_turn`, `long_layback`, `estimated_altitude`)
 - Class shown as `class_display`, with the raw `class` code visible underneath  provenance is part of the
   pitch

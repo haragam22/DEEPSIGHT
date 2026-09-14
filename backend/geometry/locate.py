@@ -103,7 +103,7 @@ def locate_detection(*, all_pings, ping_index: int, bbox_px: dict, channel: str,
         "ground_range_m": round(ground_range, 2),
         "bbox_m_width": bbox_m_width,
         "bbox_m_height": bbox_m_height,
-        "object_height_m": None,          # from shadow + geometry (section 3.6) - not yet
+        "object_height_m": None,          # filled by the caller from the shadow (infer.py, section 3.6)
         "flags": flags,
         "_error_budget": budget,
         "_geometry": geometry,

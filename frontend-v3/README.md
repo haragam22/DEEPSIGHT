@@ -24,7 +24,7 @@ static diagrams:
 | 05 | Geometry → a position | `Cuboid3D`, `WorldMap`, the real error budget |
 | 06 | Ready | live stats + `OptionWheel` of surveys on this machine |
 
-`src/lib/tourData.ts` picks a completed survey with detections, or stands up the demo
+`src/lib/tourData.ts` picks a completed survey with detections, or stands up the A4 & SSS
 survey and runs detection, and feeds it in. It is **non-blocking**: chapters render
 straight away and swap real numbers in when they arrive; if nothing is available they
 fall back to schematics. It deliberately has no abort flag  under StrictMode an abort

@@ -1,14 +1,16 @@
 """In-memory survey registry + parse orchestration.
 
-ponytail: registry is a dict, uploads live under data/uploads/<id>/. A restart drops
-the registry (files stay). Swap for SQLite + a job queue when a second process needs
-to see the same surveys.
+ponytail: registry is a dict, uploads live under data/uploads/<id>/. Finished surveys are
+pickled to data/surveys/ and restored at startup. Swap for SQLite + a job queue when a
+second process needs to see the same surveys.
 """
 
 from __future__ import annotations
 
+import pickle
 import secrets
-from dataclasses import dataclass, field
+import threading
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from backend.ingest.models import SurveyMeta
 from backend.ingest.xtf import read_survey
 
 UPLOAD_DIR = Path("data/uploads")
+SAVE_DIR = Path("data/surveys")
 MAX_BYTES = 800 * 1024 * 1024        # apiendpoints.md section 9 FILE_TOO_LARGE
 # (raised from 500 MB: the GA0346 HF lines are 400-570 MB each)
 TRACK_MAX_POINTS = 5000              # apiendpoints.md section 4
@@ -37,7 +40,7 @@ class Survey:
     pings_processed: int = 0
     message: str | None = None
     detections: list = field(default_factory=list)   # filled at Step 8
-    prerendered: object = None    # (n_pings, width) uint8 for demo surveys; bypasses display chain
+    prerendered: object = None    # (n_pings, width) uint8 for tile/image surveys; bypasses display chain
     display_width: int | None = None   # square-ground-pixel across-track width for the display chain
 
     @property
@@ -64,16 +67,34 @@ def create_survey(filename: str, data: bytes) -> Survey:
     return s
 
 
-def create_demo_survey(n_tiles: int = 24, width: int = 1024) -> Survey:
-    """Dev/demo only: stack boxed SSS Mine test tiles into a pseudo-survey with a
+_LAT0, _LON0 = 13.05, 80.30           # off Chennai - plausible for the PS area
+_C, _SLANT_RANGE_M = 1500.0, 60.0
+
+
+def _synthetic_pings(wf: np.ndarray, t0: datetime) -> list:
+    """Straight-line eastward track at 0.2 s per row over a stacked tile waterfall."""
+    from backend.ingest.models import PingRecord
+
+    width = wf.shape[1]
+    fs = (width // 2) * _C / (2 * _SLANT_RANGE_M)
+    dlon = 0.15 / (111_320.0 * np.cos(np.deg2rad(_LAT0)))
+    return [PingRecord(
+        ping_number=i, time=t0 + timedelta(seconds=0.2 * i),
+        lat=_LAT0, lon=_LON0 + dlon * i,
+        heading_deg=90.0, pitch_deg=0.0, roll_deg=0.0, heave_m=0.0,
+        altitude_m=12.0, sound_speed_ms=_C, sample_rate_hz=fs, slant_range_m=_SLANT_RANGE_M,
+        port=wf[i, :width // 2], starboard=wf[i, width // 2:],
+    ) for i in range(wf.shape[0])]
+
+
+def create_a4sss_survey(n_tiles: int = 24, width: int = 1024) -> Survey:
+    """Stack boxed SSS Mine test tiles into a pseudo-survey ("A4 & SSS") with a
     synthetic straight-line track, so the trained detector produces visible results.
     The Larsen XTF imagery is speckle-only and yields nothing (see project notes).
     """
     import glob
 
     import cv2
-
-    from backend.ingest.models import PingRecord
 
     tiles = []
     for f in sorted(glob.glob("data/detect/yolo/images/val/sss_*.jpg")):
@@ -90,37 +111,31 @@ def create_demo_survey(n_tiles: int = 24, width: int = 1024) -> Survey:
 
     wf = np.vstack([cv2.resize(cv2.imread(f, cv2.IMREAD_GRAYSCALE), (width, width))
                     for f in tiles]).astype(np.uint8)
-    n = wf.shape[0]
-
-    lat0, lon0 = 13.05, 80.30                     # off Chennai - plausible for the PS area
-    c, slant_range_m = 1500.0, 60.0
-    fs = (width // 2) * c / (2 * slant_range_m)
-    dlon = 0.15 / (111_320.0 * np.cos(np.deg2rad(lat0)))
-    t0 = datetime.now(timezone.utc).replace(microsecond=0)
-
-    pings = [PingRecord(
-        ping_number=i, time=t0 + timedelta(seconds=0.2 * i),
-        lat=lat0, lon=lon0 + dlon * i,
-        heading_deg=90.0, pitch_deg=0.0, roll_deg=0.0, heave_m=0.0,
-        altitude_m=12.0, sound_speed_ms=c, sample_rate_hz=fs, slant_range_m=slant_range_m,
-        port=wf[i, :width // 2], starboard=wf[i, width // 2:],
-    ) for i in range(n)]
-
-    meta = SurveyMeta(
-        filename="DEMO-sss-mine-tiles", path="", ping_count=n,
-        samples_per_channel=width // 2, range_m=slant_range_m, frequency_khz=900,
-        duration_s=0.2 * n, altitude_source="xtf_header", altitude_mean_m=12.0,
-        sound_speed_ms=c,
-        bounds={"north": lat0, "south": lat0, "east": lon0 + dlon * n, "west": lon0},
-        start_time=t0, sonar_name="SSS Mine Detection (demo tiles)",
-        recording_program="deepsight-demo",
-        warnings=[],
-    )
-    s = Survey(survey_id="svy_demo" + secrets.token_hex(2), filename=meta.filename,
-               path="", size_bytes=int(wf.nbytes), created_at=_now(), status="ready",
-               meta=meta, pings=pings, prerendered=wf, progress=1.0, pings_processed=n)
+    s = _tile_survey(wf, filename="A4 & SSS", sid="svy_a4sss" + secrets.token_hex(2),
+                     frequency_khz=900, sonar_name="A4 & SSS tiles",
+                     recording_program="deepsight-a4sss", warnings=[])
     SURVEYS[s.survey_id] = s
     return s
+
+
+def _tile_survey(wf: np.ndarray, *, filename: str, sid: str, frequency_khz: int,
+                 sonar_name: str, recording_program: str, warnings: list[str]) -> Survey:
+    n = wf.shape[0]
+    t0 = datetime.now(timezone.utc).replace(microsecond=0)
+    pings = _synthetic_pings(wf, t0)
+    meta = SurveyMeta(
+        filename=filename, path="", ping_count=n,
+        samples_per_channel=wf.shape[1] // 2, range_m=_SLANT_RANGE_M,
+        frequency_khz=frequency_khz,
+        duration_s=0.2 * n, altitude_source="xtf_header", altitude_mean_m=12.0,
+        sound_speed_ms=_C,
+        bounds={"north": _LAT0, "south": _LAT0, "east": pings[-1].lon, "west": _LON0},
+        start_time=t0, sonar_name=sonar_name, recording_program=recording_program,
+        warnings=warnings,
+    )
+    return Survey(survey_id=sid, filename=meta.filename,
+               path="", size_bytes=int(wf.nbytes), created_at=_now(), status="ready",
+                  meta=meta, pings=pings, prerendered=wf, progress=1.0, pings_processed=n)
 
 
 def create_image_survey(images: list[tuple[str, bytes]], width: int = 1024) -> Survey:
@@ -129,8 +144,6 @@ def create_image_survey(images: list[tuple[str, bytes]], width: int = 1024) -> S
     geometry is not real, so it carries a warning and no true coordinates.
     """
     import cv2
-
-    from backend.ingest.models import PingRecord
 
     mats = []
     for name, data in images:
@@ -141,35 +154,58 @@ def create_image_survey(images: list[tuple[str, bytes]], width: int = 1024) -> S
     if not mats:
         raise ValueError("no images")
     wf = np.vstack(mats).astype(np.uint8)
-    n = wf.shape[0]
-
-    lat0, lon0 = 13.05, 80.30
-    c, slant_range_m = 1500.0, 60.0
-    fs = (width // 2) * c / (2 * slant_range_m)
-    dlon = 0.15 / (111_320.0 * np.cos(np.deg2rad(lat0)))
-    t0 = datetime.now(timezone.utc).replace(microsecond=0)
-    pings = [PingRecord(
-        ping_number=i, time=t0 + timedelta(seconds=0.2 * i),
-        lat=lat0, lon=lon0 + dlon * i,
-        heading_deg=90.0, pitch_deg=0.0, roll_deg=0.0, heave_m=0.0,
-        altitude_m=12.0, sound_speed_ms=c, sample_rate_hz=fs, slant_range_m=slant_range_m,
-        port=wf[i, :width // 2], starboard=wf[i, width // 2:],
-    ) for i in range(n)]
-
-    meta = SurveyMeta(
-        filename=f"IMAGES-{len(mats)}-tiles", path="", ping_count=n,
-        samples_per_channel=width // 2, range_m=slant_range_m, frequency_khz=0,
-        duration_s=0.2 * n, altitude_source="xtf_header", altitude_mean_m=12.0,
-        sound_speed_ms=c,
-        bounds={"north": lat0, "south": lat0, "east": lon0 + dlon * n, "west": lon0},
-        start_time=t0, sonar_name="uploaded images", recording_program="deepsight-image",
-        warnings=["Image upload: synthetic navigation, coordinates are not real."],
-    )
-    s = Survey(survey_id="svy_img" + secrets.token_hex(3), filename=meta.filename,
-               path="", size_bytes=int(wf.nbytes), created_at=_now(), status="ready",
-               meta=meta, pings=pings, prerendered=wf, progress=1.0, pings_processed=n)
+    s = _tile_survey(wf, filename=f"IMAGES-{len(mats)}-tiles",
+                     sid="svy_img" + secrets.token_hex(3), frequency_khz=0,
+                     sonar_name="uploaded images", recording_program="deepsight-image",
+                     warnings=["Image upload: synthetic navigation, coordinates are not real."])
     SURVEYS[s.survey_id] = s
     return s
+
+
+def save(s: Survey) -> None:
+    """Write a finished survey to disk so a restart does not lose it. Pings are not
+    stored: tile surveys rebuild them from the waterfall, XTF surveys re-parse the upload."""
+    SAVE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = SAVE_DIR / f"{s.survey_id}.tmp"
+    with tmp.open("wb") as f:
+        pickle.dump(replace(s, pings=None), f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.replace(SAVE_DIR / f"{s.survey_id}.pkl")
+
+
+def forget(sid: str) -> None:
+    (SAVE_DIR / f"{sid}.pkl").unlink(missing_ok=True)
+
+
+def load_saved() -> None:
+    """Restore saved surveys at startup. XTF re-parses run in one background thread
+    (status shows 'parsing' until the pings are back; detections are kept)."""
+    reparse = []
+    for p in sorted(SAVE_DIR.glob("*.pkl")):
+        try:
+            with p.open("rb") as f:
+                s: Survey = pickle.load(f)
+        except Exception as exc:                   # noqa: BLE001 - one bad file must not stop startup
+            print(f"[state] skipped {p.name}: {type(exc).__name__}: {exc}")
+            continue
+        if s.prerendered is not None:
+            s.pings = _synthetic_pings(s.prerendered, s.meta.start_time)
+        elif Path(s.path).is_file():
+            s.status, s.message = "parsing", "Restoring after restart"
+            reparse.append(s)
+        else:
+            continue                               # upload file gone - nothing to restore from
+        SURVEYS[s.survey_id] = s
+
+    def _restore():
+        for s in reparse:
+            try:
+                s.meta, s.pings = read_survey(s.path)
+                s.status, s.message = "complete", f"{len(s.detections)} detections"
+            except Exception as exc:               # noqa: BLE001 - surfaced via status
+                s.status, s.message = "failed", f"{type(exc).__name__}: {exc}"
+
+    if reparse:
+        threading.Thread(target=_restore, daemon=True).start()
 
 
 def parse_survey(sid: str) -> None:

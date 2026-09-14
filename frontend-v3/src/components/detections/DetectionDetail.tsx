@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { ClassBadge } from '@/components/common/ClassBadge'
 import { FlagChips } from '@/components/common/FlagChips'
 import { TrackMap } from '@/components/console/TrackMap'
@@ -8,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { coord, metres, num } from '@/lib/format'
 import type { DetectionDetailResponse } from '@/lib/types'
 import { ErrorBudgetBar } from './ErrorBudgetBar'
+import { Relief3D } from './Relief3D'
 
 export function DetectionDetail({
   detail,
@@ -16,6 +19,9 @@ export function DetectionDetail({
   detail: DetectionDetailResponse | null
   loading?: boolean
 }) {
+  const [showBox, setShowBox] = useState(false)
+  const view = showBox ? 'box' : 'relief'
+
   if (loading) {
     return (
       <div className="space-y-3 p-1">
@@ -47,17 +53,45 @@ export function DetectionDetail({
         />
       </div>
 
-      {/* the object, to scale */}
+      {/* the object: estimated relief, or the plain dimension box */}
       <div className="rounded-lg border bg-card p-3">
-        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Object  measured dimensions
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {view === 'relief' ? 'Object  estimated relief' : 'Object  measured dimensions'}
+          </span>
+          {detail.relief && (
+            <div className="flex rounded-md border p-0.5 text-[11px]">
+              {(['relief', 'box'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setShowBox(v === 'box')}
+                  aria-pressed={view === v}
+                  className={`rounded px-2 py-0.5 capitalize ${view === v ? 'bg-muted font-medium' : 'text-muted-foreground'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <Cuboid3D
-          widthM={d.bbox_m_width}
-          lengthM={d.bbox_m_height}
-          heightM={d.object_height_m}
-          sceneHeight={190}
-        />
+        {view === 'relief' && detail.relief ? (
+          <Relief3D relief={detail.relief} sceneHeight={190} />
+        ) : (
+          <>
+            <Cuboid3D
+              widthM={d.bbox_m_width}
+              lengthM={d.bbox_m_height}
+              heightM={d.object_height_m}
+              sceneHeight={190}
+            />
+            {!detail.relief && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                No readable shadow for this target, so no relief  showing the dimension box.
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* where it is  world locator, then the metre-scale search circle */}

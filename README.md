@@ -161,7 +161,7 @@ Open <http://localhost:5373>. The Vite dev server proxies `/api`, `/ws`, `/healt
 | Vercel URL asks to sign in / request access | Deployment Protection on | dashboard → Settings → Deployment Protection → Vercel Authentication → Disabled |
 | Frontend loads but every API call fails | tunnel URL changed since last build | redo Terminal 3 (rewrite `.env.production`, `vercel --prod`) |
 | Frontend calls `http://` while page is `https://` → browser blocks | `VITE_API_BASE` missing the `https://` scheme | set the full `https://...` URL, rebuild |
-| "Demo survey" button returns 500 | needs gitignored tiles under `data/detect/yolo/images/val/` | use image upload instead |
+| "A4 & SSS" button returns 500 | needs gitignored tiles under `data/detect/yolo/images/val/` | use image upload instead |
 | Survey list empty after it worked | backend restarted — store is in-memory | re-upload; state does not persist across restarts |
 
 ---

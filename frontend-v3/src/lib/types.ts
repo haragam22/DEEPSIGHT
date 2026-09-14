@@ -147,10 +147,22 @@ export interface DetectionGeometry {
   fish_lon: number | null
 }
 
+export interface Relief {
+  rows: number
+  cols: number
+  cell_m_across: number
+  cell_m_along: number | null
+  /** rows × cols metres, row-major; 0 = seabed */
+  heights: number[]
+  max_height_m: number
+  measured_fraction: number
+}
+
 export interface DetectionDetailResponse {
   detection: Detection
   error_budget: ErrorBudget
   geometry: DetectionGeometry
+  relief: Relief | null
 }
 
 export interface SurveyStats {

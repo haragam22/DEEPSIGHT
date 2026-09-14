@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { TriangleAlert } from 'lucide-react'
 
-// The demo survey no longer emits a "synthetic navigation" disclaimer, but older
+// The A4 & SSS survey no longer emits a "synthetic navigation" disclaimer, but older
 // in-memory surveys still might. Drop that one line here so it never reaches the UI.
-const HIDDEN = /synthetic navigation|SSS Mine Detection test tiles|^Demo survey:/i
+const HIDDEN = /synthetic navigation|SSS Mine Detection test tiles/i
 
 export function WarningBanner({ warnings }: { warnings: string[] }) {
   const shown = warnings.filter((w) => !HIDDEN.test(w))

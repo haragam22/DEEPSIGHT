@@ -310,12 +310,30 @@ panel built on it is the answer to "how did you get that coordinate?"**
     "heading_deg": 118.4,
     "fish_lat": -65.2288,
     "fish_lon": -60.3311
+  },
+  "relief": {
+    "rows": 12,
+    "cols": 18,
+    "cell_m_across": 0.62,
+    "cell_m_along": 0.38,
+    "heights": [0.0, 0.0, 1.84, 2.1, "… rows × cols values, row-major"],
+    "max_height_m": 2.1,
+    "measured_fraction": 0.71
   }
 }
 ```
 
 `terms` is ordered largest-first by the backend. P renders it as a horizontal bar breakdown; `explanation`
 is a pre-written plain-English sentence P displays verbatim.
+
+**`relief`** (added post-freeze with the owner's agreement) is an estimated 2.5D heightfield of the object,
+or `null` when the box has no highlight or no readable shadow. `heights` is `rows × cols` metres,
+row-major: row 0 is the earliest ping of the box, column 0 is the smallest across-track pixel. `0` means
+seabed (outside the footprint). The footprint comes from the acoustic highlight, closed into one solid body; each row's height comes
+from that ping's shadow length. Rows with no readable shadow copy the nearest measured row, and
+`measured_fraction` is the share of rows actually measured. `cell_m_along` is `null` when along-track ping
+spacing is unknown. The far side of the object is never seen  P labels this as estimated relief, not a
+3D model.
 
 ---
 

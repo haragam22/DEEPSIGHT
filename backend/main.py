@@ -27,6 +27,7 @@ app = FastAPI(title="Deep-Sight", version="0.1.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+state.load_saved()
 
 
 @app.exception_handler(ApiError)
@@ -70,11 +71,12 @@ async def upload_survey(file: UploadFile, background: BackgroundTasks) -> dict:
             "status": s.status, "created_at": s.created_at}
 
 
+# path kept as-is: it is in the frozen contract and older clients call it
 @app.post("/api/dev/demo-survey", status_code=201)
-def demo_survey() -> dict:
-    """Dev only: register a pseudo-survey from SSS Mine test tiles + synthetic nav, so the
-    frontend has something the trained detector actually fires on. Run /process after."""
-    s = state.create_demo_survey()
+def a4sss_survey() -> dict:
+    """Register the "A4 & SSS" pseudo-survey from SSS Mine test tiles + synthetic nav, so
+    the frontend has something the trained detector actually fires on. Run /process after."""
+    s = state.create_a4sss_survey()
     return {"survey_id": s.survey_id, "filename": s.filename, "status": s.status,
             "ping_count": s.ping_count}
 
@@ -117,6 +119,7 @@ def delete_survey(sid: str) -> Response:
     RAM immediately. 404 if it was already gone."""
     _get(sid)
     state.SURVEYS.pop(sid, None)
+    state.forget(sid)
     return Response(status_code=204)
 
 
@@ -137,6 +140,12 @@ def _run_detection(sid: str) -> None:
     except Exception as exc:                       # noqa: BLE001 - surfaced via status
         s.status = "failed"
         s.message = f"{type(exc).__name__}: {exc}"
+        return
+    if sid in state.SURVEYS:                       # not deleted while detection ran
+        try:
+            state.save(s)
+        except OSError as exc:                     # disk trouble must not fail a finished run
+            print(f"[state] could not save {sid}: {exc}")
 
 
 @app.post("/api/surveys/{sid}/process", status_code=202)
@@ -223,7 +232,7 @@ def get_detection(did: str) -> dict:
         for d in s.detections:
             if d["detection_id"] == did:
                 return {"detection": _public(d), "error_budget": d.get("_error_budget"),
-                        "geometry": d.get("_geometry")}
+                        "geometry": d.get("_geometry"), "relief": d.get("_relief")}
     raise ApiError("SURVEY_NOT_FOUND", 404, "No such detection.")
 
 

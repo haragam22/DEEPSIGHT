@@ -65,7 +65,7 @@ def detect_survey(survey, conf: float = CONF) -> list[dict]:
     model = load_model()
     # detector runs on the ANALYSIS chain (log + nadir mask + wavelet despeckle), never the
     # display chain (idea.md section 6). prerendered surveys are already-processed imagery
-    # (demo tiles / uploaded PNGs) - leave those untouched.
+    # (A4 & SSS tiles / uploaded PNGs) - leave those untouched.
     wf = survey.prerendered if survey.prerendered is not None else analysis.to_u8_analysis(pings)
     wf = np.ascontiguousarray(wf)             # (n_pings, width) uint8
     n, width = wf.shape
@@ -112,6 +112,7 @@ def detect_survey(survey, conf: float = CONF) -> list[dict]:
         return dets
 
     from backend.geometry.locate import locate_detection
+    from backend.geometry.relief import relief
     from backend.geometry.shadow import object_height_m
 
     m_per_px_across = (survey.meta.range_m * 2 / width) if width else 0.0
@@ -130,6 +131,13 @@ def detect_survey(survey, conf: float = CONF) -> list[dict]:
             wf, d["bbox_px"], d["channel"],
             altitude_m=g["altitude_m"], ground_range_m=g["ground_range_m"],
             slant_range_m=g["slant_range_m"], m_per_px_across=m_per_px_across,
+        )
+        bh = d["bbox_px"]["h"]
+        d["_relief"] = relief(
+            wf, d["bbox_px"], d["channel"],
+            altitude_m=g["altitude_m"], ground_range_m=g["ground_range_m"],
+            m_per_px_across=m_per_px_across,
+            m_per_ping=(d["bbox_m_height"] / bh) if d["bbox_m_height"] and bh else None,
         )
         located.append(d)
 
